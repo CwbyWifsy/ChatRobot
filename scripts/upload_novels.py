@@ -31,7 +31,7 @@ async def process_file(
     vector_store: MilvusVectorStore,
     splitter: ChapterTextSplitter,
     hasher: NovelHasher,
-    collection: str | None,
+    collection_name: str,
     force: bool,
 ) -> None:
     logger.info("Reading %s", path)
@@ -40,7 +40,7 @@ async def process_file(
     book_title = input(f"为文件 {path.name} 输入小说名称（直接回车使用文件名）: ") or path.stem
 
     file_hash = hasher.hash_file(path, extra_values=[book_title])
-    if not force and vector_store.has_file(file_hash, collection):
+    if not force and vector_store.has_file(file_hash, collection_name):
         confirm = input(f"检测到 {path} 已上传过，是否重新上传? [y/N]: ").strip().lower()
         if confirm not in {"y", "yes"}:
             logger.info("跳过 %s", path)
@@ -63,8 +63,8 @@ async def process_file(
         for chunk, embedding in zip(chunks, embeddings)
     ]
 
-    vector_store.insert_records(records, collection)
-    logger.info("已向集合 %s 写入 %d 个分片", collection or vector_store.collection_name, len(records))
+    vector_store.insert_records(records, collection_name)
+    logger.info("已向集合 %s 写入 %d 个分片", collection_name, len(records))
 
 
 async def main() -> None:
@@ -82,6 +82,32 @@ async def main() -> None:
 
     embedding_service = EmbeddingService()
     vector_store = MilvusVectorStore(collection_name=args.collection)
+
+    target_collection = args.collection or vector_store.collection_name
+    if not args.collection:
+        collections = vector_store.list_collections()
+        if collections:
+            logger.info("当前共有 %d 个集合：", len(collections))
+            for name in collections:
+                try:
+                    novels = vector_store.list_books(name)
+                except Exception as exc:  # pragma: no cover - 运行环境可能缺少权限
+                    logger.warning("读取集合 %s 的小说列表失败：%s", name, exc)
+                    novels = []
+                if novels:
+                    logger.info("  - %s (%d 本)：%s", name, len(novels), ", ".join(novels))
+                else:
+                    logger.info("  - %s (暂无小说)", name)
+        else:
+            logger.info("当前没有集合，将创建默认集合 %s", target_collection)
+
+        chosen = input(f"请输入目标集合名称（直接回车使用 {target_collection}）: ").strip()
+        if chosen:
+            target_collection = chosen
+
+    vector_store.use_collection(target_collection)
+    logger.info("上传目标集合：%s", target_collection)
+
     splitter = ChapterTextSplitter()
     hasher = NovelHasher()
 
@@ -92,7 +118,7 @@ async def main() -> None:
             vector_store=vector_store,
             splitter=splitter,
             hasher=hasher,
-            collection=args.collection,
+            collection_name=vector_store.collection_name,
             force=args.force,
         )
 

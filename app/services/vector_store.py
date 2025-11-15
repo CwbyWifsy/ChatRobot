@@ -86,6 +86,12 @@ class MilvusVectorStore:
     def list_collections(self) -> List[str]:
         return sorted(utility.list_collections())
 
+    def use_collection(self, collection_name: str) -> None:
+        if collection_name == self.collection_name:
+            return
+        self.collection_name = collection_name
+        self.collection = self._ensure_collection()
+
     def list_books(self, collection_name: str | None = None) -> List[str]:
         collection = Collection(collection_name or self.collection_name)
         results = collection.query(

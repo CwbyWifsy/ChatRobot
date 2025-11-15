@@ -19,8 +19,20 @@ chat_sessions = ChatSessionManager()
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
+    requested_collection = payload.collection
+    active_collection = (
+        requested_collection
+        or chat_sessions.get_collection(payload.session_id)
+        or rag_service.vector_store.collection_name
+    )
+    chat_sessions.set_collection(payload.session_id, active_collection)
+
     history = chat_sessions.get_history(payload.session_id)
-    documents = rag_service.retrieve(payload.query, top_k=payload.top_k)
+    documents = rag_service.retrieve(
+        payload.query,
+        top_k=payload.top_k,
+        collection_name=active_collection,
+    )
     answer = rag_service.generate(payload.query, documents, history)
     chat_sessions.append(payload.session_id, payload.query, answer)
 
@@ -35,7 +47,13 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
         for doc in documents
     ]
 
-    logger.info("Session %s | User: %s | Answer length: %s", payload.session_id, payload.query, len(answer))
+    logger.info(
+        "Session %s | Collection %s | User: %s | Answer length: %s",
+        payload.session_id,
+        active_collection,
+        payload.query,
+        len(answer),
+    )
 
     return ChatResponse(answer=answer, citations=citations)
 

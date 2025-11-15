@@ -23,9 +23,18 @@ class RAGService:
     def index_records(self, records: List[VectorRecord], collection_name: str | None = None) -> None:
         self.vector_store.insert_records(records, collection_name)
 
-    def retrieve(self, query: str, top_k: int = 4) -> List[Dict[str, str]]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 4,
+        collection_name: str | None = None,
+    ) -> List[Dict[str, str]]:
         embedding = self.embedding_service.embed_documents([query])[0]
-        results = self.vector_store.search(embedding, top_k=top_k)
+        results = self.vector_store.search(
+            embedding,
+            top_k=top_k,
+            collection_name=collection_name,
+        )
         documents: List[Dict[str, str]] = []
         for hit in results:
             documents.append(

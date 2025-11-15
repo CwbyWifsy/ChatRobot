@@ -17,6 +17,10 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Unique identifier for the conversation session")
     query: str = Field(..., description="User question")
     top_k: int = Field(4, ge=1, le=10, description="Number of documents to retrieve")
+    collection: Optional[str] = Field(
+        None,
+        description="Optional Milvus collection name. If omitted, the last used collection for the session or the default collection will be used.",
+    )
 
 
 class DocumentCitation(BaseModel):
