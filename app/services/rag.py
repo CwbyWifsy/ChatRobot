@@ -49,7 +49,8 @@ class RAGService:
             )
         return documents
 
-    def generate(self, query: str, context_documents: List[Dict[str, str]], history: List[Dict[str, str]]) -> str:
+    def generate(self, query: str, context_documents: List[Dict[str, str]], history: List[Dict[str, str]], model_name = None) -> str:
+        selected_model = model_name or settings.llm_model_name
         context_text = "\n\n".join(
             f"【{doc['book_title']}·{doc['chapter_title']}·chunk {doc['chunk_index']}】\n{doc['content']}"
             for doc in context_documents
@@ -74,7 +75,7 @@ class RAGService:
             ]
         )
         response = self.client.responses.create(
-            model=settings.llm_model_name,
+            model=selected_model,
             temperature=settings.llm_temperature,
             max_output_tokens=settings.llm_max_tokens,
             input=messages,

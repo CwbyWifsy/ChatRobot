@@ -33,7 +33,7 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
         top_k=payload.top_k,
         collection_name=active_collection,
     )
-    answer = rag_service.generate(payload.query, documents, history)
+    answer = rag_service.generate(payload.query, documents, history, payload.model_name)
     chat_sessions.append(payload.session_id, payload.query, answer)
 
     citations: List[DocumentCitation] = [
@@ -48,11 +48,13 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     ]
 
     logger.info(
-        "Session %s | Collection %s | User: %s | Answer length: %s",
+        "Session %s | Collection %s | Model %s | User: %s | Answer length: %s | TOP_k: %s",
         payload.session_id,
         active_collection,
+        payload.model_name,
         payload.query,
         len(answer),
+        payload.top_k
     )
 
     return ChatResponse(answer=answer, citations=citations)

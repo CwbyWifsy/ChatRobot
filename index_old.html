@@ -426,15 +426,6 @@
           <option value="">加载中...</option>
         </select>
       </div>
-      <label for="topk-input" style="color:#66ccff; margin-left:16px;">Top K：</label>
-        <input
-          id="topk-input"
-          type="number"
-          min="1"
-          max="50"
-          value="4"
-          style="width:60px; padding:4px 6px; border-radius:6px; background:#1c1f26; color:white; border:1px solid #333;"
-        />
       <div class="app-badge">本地 RAG · Milvus</div>
     </div>
   </header>
@@ -496,8 +487,7 @@
   const modelSelect = document.getElementById("model-select");
   const collectionSelect = document.getElementById("collection-select");
   const collectionHint = document.getElementById("collection-hint");
-  const topkInput = document.getElementById("topk-input");
-  const top_k = parseInt(topkInput.value) || 4;  // 防止为空
+
   let currentModel = "";
   let currentCollection = "novels";
 
@@ -592,7 +582,6 @@
           session_id: SESSION_ID,
           collection: currentCollection,
           model_name: currentModel,  // 后端现在不用也没关系
-          top_k: parseInt(topkInput.value) || 4,
           query: query,
         }),
       });

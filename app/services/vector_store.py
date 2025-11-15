@@ -152,5 +152,72 @@ class MilvusVectorStore:
             return []
         return results[0]
 
+    def copy_collection(self, src_collection: str, dst_collection: str, batch_size: int = 2000):
+        """
+        Copy all rows from src_collection to dst_collection.
+        """
+        print(f"Start copying collection: {src_collection} → {dst_collection}")
+
+        # 1. 准备源 collection
+        src = Collection(src_collection)
+        src.load()
+
+        # 2. 目标 collection：如果不存在，就按照你当前类里的 schema 创建
+        if dst_collection not in utility.list_collections():
+            print(f"⚠️  Target collection {dst_collection} not found. Creating...")
+            old = self.collection_name
+            self.use_collection(dst_collection)  # 自动创建
+            self.use_collection(old)
+        dst = Collection(dst_collection)
+
+        # 3. 获取总行数
+        total = src.num_entities
+        print(f"Source total rows: {total}")
+
+        # 4. 分批 query 所有数据
+        offset = 0
+        while offset < total:
+            print(f"➡️  Reading batch offset={offset} ...")
+
+            batch = src.query(
+                expr="",  # 空表达式，读取全量
+                offset=offset,
+                limit=batch_size,
+                output_fields=[
+                    "book_title",
+                    "chapter_title",
+                    "chunk_index",
+                    "source_path",
+                    "file_hash",
+                    "content",
+                    "embedding",
+                ]
+            )
+
+            if not batch:
+                break
+
+            # 转为 VectorRecord
+            records = []
+            for row in batch:
+                rec = VectorRecord(
+                    content=row["content"],
+                    embedding=row["embedding"],
+                    book_title=row["book_title"],
+                    chapter_title=row["chapter_title"],
+                    chunk_index=row["chunk_index"],
+                    source_path=row["source_path"],
+                    file_hash=row["file_hash"],
+                )
+                records.append(rec)
+
+            # 写入目标 collection
+            self.insert_records(records, collection_name=dst_collection)
+            print(f"    ✔ Inserted {len(records)} rows into {dst_collection}")
+
+            offset += batch_size
+
+        print("Copy finished successfully!")
+
 
 __all__ = ["MilvusVectorStore", "VectorRecord"]

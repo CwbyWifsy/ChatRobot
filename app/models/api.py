@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Optional
-
+from app.config import settings
 from pydantic import BaseModel, Field
 
 
@@ -16,10 +16,15 @@ class NovelUploadResult(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Unique identifier for the conversation session")
     query: str = Field(..., description="User question")
-    top_k: int = Field(4, ge=1, le=10, description="Number of documents to retrieve")
+    top_k: int = Field(default=10, ge=1, le=10, description="Number of documents to retrieve")
     collection: Optional[str] = Field(
         None,
-        description="Optional Milvus collection name. If omitted, the last used collection for the session or the default collection will be used.",
+        description="Optional Milvus collection name. If omitted, the last used collection for the session or the "
+                    "default collection will be used.",
+    )
+    model_name: Optional[str] = Field(
+        None,
+        description="LLM model name selected from UI"
     )
 
 
@@ -75,3 +80,5 @@ __all__ = [
     "ModelInfo",
     "ModelList"
 ]
+if __name__ == '__main__':
+    print(settings)

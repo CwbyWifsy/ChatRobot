@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     chunk_size: int = Field(800, description="Number of characters per chunk inside a chapter")
     chunk_overlap: int = Field(120, description="Number of overlapping characters between chunks")
 
+    TOP_K: int = Field(10, description="query chunk to return")
     # LLM configuration
     llm_base_url: str = Field("https://api.example.com/v1", description="Base URL for the OpenAPI compatible chat completion endpoint")
     llm_model_name: str = Field("qwen-max", description="Model name for the chat completion endpoint")

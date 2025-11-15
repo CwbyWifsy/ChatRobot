@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from scripts.utils import make_collection_name_from_path
 import argparse
 import asyncio
 import json
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 def iter_text_files(directory: Path) -> Iterable[Path]:
     for path in sorted(directory.glob("**/*.txt")):
         if path.is_file():
+            # convert_to_utf8(path)
             yield path
 
 
@@ -35,19 +36,26 @@ async def process_file(
         splitter: ChapterTextSplitter,
         hasher: NovelHasher,
         collection_name: str,
+        extra_collection_name: str | None,
         force: bool,
 ) -> None:
     logger.info("Reading %s", path)
+
+    extra_store = None
+    if extra_collection_name:
+        logger.info("为文件 %s 使用独立集合 %s", path.name, extra_collection_name)
+        print(f"本书独立集合名：{path.name} -> {extra_collection_name}")
+        extra_store = MilvusVectorStore(collection_name=extra_collection_name)
+
     content = await load_file(path)
 
-    book_title = input(f"为文件 {path.name} 输入小说名称（直接回车使用文件名）: ") or path.stem
+    book_title = path.stem
+    logger.info("当前文件书名自动设置为：%s", book_title)
 
     file_hash = hasher.hash_file(path, extra_values=[book_title])
     if not force and vector_store.has_file(file_hash, collection_name):
-        confirm = input(f"检测到 {path} 已上传过，是否重新上传? [y/N]: ").strip().lower()
-        if confirm not in {"y", "yes"}:
-            logger.info("跳过 %s", path)
-            return
+        logger.info("检测到 %s 已上传过，未指定 --force，自动跳过", path)
+        return
 
     # 1⃣️ 切分文本 —— 带进度条
     logger.info("正在切分章节…")
@@ -58,7 +66,7 @@ async def process_file(
         chunks.append(c)
 
     # 2⃣️ 分批 embedding + 上传，三个真实进度条
-    BATCH_SIZE = 100  # 每批处理多少条，可以按机器情况改
+    BATCH_SIZE = 1000  # 每批处理多少条，可以按机器情况改
 
     total = len(chunks)
     logger.info("正在分批生成向量并写入 Milvus...")
@@ -87,7 +95,8 @@ async def process_file(
             for chunk, embedding in zip(batch_chunks, batch_embeddings):
                 chapter_title = chunk.chapter_title
                 if len(chapter_title) > MAX_CHAPTER_TITLE_LEN:
-                    logger.warning("跳过一条记录：chapter_title_len=%d, title=%r", len(chapter_title), chapter_title[:80])
+                    logger.warning("跳过一条记录：chapter_title_len=%d, title=%r", len(chapter_title),
+                                   chapter_title[:80])
                     continue
                 batch_records.append(
                     VectorRecord(
@@ -100,25 +109,17 @@ async def process_file(
                         file_hash=file_hash,
                     )
                 )
-            # batch_records = [
-            #     VectorRecord(
-            #         content=chunk.content,
-            #         embedding=embedding,
-            #         book_title=chunk.book_title,
-            #         chapter_title=chunk.chapter_title,
-            #         chunk_index=chunk.chunk_index,
-            #         source_path=str(chunk.source_path),
-            #         file_hash=file_hash,
-            #     )
-            #     for chunk, embedding in zip(batch_chunks, batch_embeddings)
-            # ]
 
             vector_store.insert_records(batch_records, collection_name)
-
+            # 如果用户启用了 single_collection，再写入新集合
+            if extra_store is not None:
+                extra_store.insert_records(batch_records)
             # 更新总体进度
             pbar_total.update(len(batch_chunks))
 
     logger.info("已向集合 %s 写入 %d 个分片", collection_name, total)
+    if extra_collection_name:
+        logger.info("已向独立集合 %s 额外写入 %d 个分片", extra_collection_name, total)
 
 
 async def main() -> None:
@@ -126,6 +127,8 @@ async def main() -> None:
     parser.add_argument("directory", type=Path, help="Directory containing .txt novel files")
     parser.add_argument("--collection", type=str, default=None, help="Target collection name")
     parser.add_argument("--force", action="store_true", help="Upload even if file hash already exists")
+    parser.add_argument("--single_collection", action="store_true",
+                        help="为当前上传额外创建并写入一个新集合")
     args = parser.parse_args()
 
     directory: Path = args.directory
@@ -136,8 +139,8 @@ async def main() -> None:
 
     embedding_service = EmbeddingService()
     vector_store = MilvusVectorStore(collection_name=args.collection)
-
     target_collection = args.collection or vector_store.collection_name
+
     if not args.collection:
         collections = vector_store.list_collections()
         if collections:
@@ -158,14 +161,37 @@ async def main() -> None:
         chosen = input(f"请输入目标集合名称（直接回车使用 {target_collection}）: ").strip()
         if chosen:
             target_collection = chosen
-
+    else:
+        logger.info(f"公共集合:{args.collection}")
     vector_store.use_collection(target_collection)
     logger.info("上传目标集合：%s", target_collection)
 
     splitter = ChapterTextSplitter()
     hasher = NovelHasher()
 
+    # 先把所有要处理的 txt 文件拿出来
+    all_files = list(iter_text_files(directory))
+    if not all_files:
+        logger.info("目录 %s 下没有找到 txt 文件", directory)
+        return
+
+    # 如果需要每本小说单独建 collection，先列出全部名字让你确认
+    per_file_extra: dict[Path, str] = {}
+    if args.single_collection:
+        print("你启用了 --single_collection，将为每本小说创建独立集合。")
+        print("即将使用如下映射：")
+
+        for f in all_files:
+            cname = make_collection_name_from_path(f)
+            per_file_extra[f] = cname
+            print(f"  {f.name}  ->  {cname}")
+
+        confirm = input("确认以上集合名映射无误后继续？[y/N]: ").strip().lower()
+        if confirm not in {"y", "yes"}:
+            raise SystemExit("已取消上传。")
+    # sys.exit()
     for file_path in iter_text_files(directory):
+        extra_name = per_file_extra.get(file_path) if args.single_collection else None
         await process_file(
             file_path,
             embedding_service=embedding_service,
@@ -173,6 +199,7 @@ async def main() -> None:
             splitter=splitter,
             hasher=hasher,
             collection_name=vector_store.collection_name,
+            extra_collection_name=extra_name,
             force=args.force,
         )
 
