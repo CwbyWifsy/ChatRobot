@@ -1,11 +1,11 @@
 from __future__ import annotations
-
+import os
 import logging
 from typing import List
 
 from fastapi import APIRouter
 
-from ..models.api import ChatRequest, ChatResponse, CollectionList, DocumentCitation
+from ..models.api import ChatRequest, ChatResponse, CollectionList, DocumentCitation, ModelList, ModelInfo
 from ..services.chat_history import ChatSessionManager
 from ..services.rag import RAGService
 
@@ -71,5 +71,29 @@ async def list_collections() -> CollectionList:
 
     return CollectionList(collections=collections, active_collection=rag_service.vector_store.collection_name)
 
+
+@router.get("/models", response_model=ModelList)
+async def list_models() -> ModelList:
+    """
+    读取 .env 中的 LLM_MODELS / LLM_DEFAULT_MODEL，
+    返回当前可用模型列表和默认模型。
+    """
+    raw = os.getenv("LLM_MODELS", "")  # 例如 "qwen2.5-72b-instruct,gpt-4.1-mini"
+    default_model = (
+        os.getenv("LLM_DEFAULT_MODEL")
+        or os.getenv("LLM_MODEL_NAME", "")  # 兼容你原来单模型的配置
+    )
+
+    # 拆分 + 去空格 / 空字符串
+    names = [m.strip() for m in raw.split(",") if m.strip()]
+
+    # 如果没配置 DEFAULT，但有列表，就默认第一个
+    if not default_model and names:
+        default_model = names[0]
+
+    return ModelList(
+        models=[ModelInfo(name=n) for n in names],
+        active_model=default_model,
+    )
 
 __all__ = ["router"]

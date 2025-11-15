@@ -23,6 +23,17 @@ class ChatRequest(BaseModel):
     )
 
 
+class ModelInfo(BaseModel):
+    """单个模型信息"""
+    name: str
+
+
+class ModelList(BaseModel):
+    """模型列表 + 当前默认模型"""
+    models: List[ModelInfo]
+    active_model: str
+
+
 class DocumentCitation(BaseModel):
     book_title: str
     chapter_title: str
@@ -61,4 +72,6 @@ __all__ = [
     "CollectionInfo",
     "CollectionList",
     "UploadConfirmation",
+    "ModelInfo",
+    "ModelList"
 ]

@@ -133,7 +133,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 10020 --reload
 
 - `POST /api/chat`：提交 `session_id`、用户问题，可选地指定 `collection`；服务会记住会话最近使用的集合，返回回答与引用来源。
 - `GET /api/collections`：列出当前可用集合及其包含的小说。
-
+- `http://127.0.0.1:10020/docs#`： FastAPI文档
 ### 5. 打开 Web 前端
 
 项目根目录下提供了一个简单的前端页面 index.html，用于在浏览器中与小说问答助手对话：

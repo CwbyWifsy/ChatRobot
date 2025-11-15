@@ -104,6 +104,45 @@
       color: var(--text-muted);
     }
 
+    /* 顶部控制栏：模型 / 向量库选择 */
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: radial-gradient(circle at top left, rgba(30,64,175,0.18), rgba(15,23,42,0.95));
+      border: 1px solid rgba(30,64,175,0.7);
+      font-size: 12px;
+      color: var(--text-dim);
+      gap: 8px;
+    }
+    .controls-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .controls-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .controls-select {
+      background: rgba(15,23,42,0.95);
+      border-radius: 999px;
+      border: 1px solid rgba(55,65,81,0.9);
+      padding: 4px 10px;
+      color: var(--text-main);
+      font-size: 12px;
+      outline: none;
+    }
+    .controls-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.6);
+    }
+
     /* 聊天区域 */
     .chat-container {
       flex: 1;
@@ -363,6 +402,34 @@
   </header>
 
   <section class="chat-container">
+        <!-- 新增：模型 / 向量库 选择栏 -->
+    <div class="controls-row">
+      <div class="controls-left">
+        <div class="controls-label">
+          <span>模型：</span>
+          <select id="model-select" class="controls-select">
+            <!-- 这里的 value 要和后端约定的模型名一致，你可以按实际改 -->
+            <option value="qwen2.5-72b-instruct" selected>Qwen2.5-72B</option>
+            <option value="gpt-4.1-mini">GPT-4.1-mini</option>
+            <option value="deepseek-chat">DeepSeek-Chat</option>
+          </select>
+        </div>
+
+        <div class="controls-label">
+          <span>向量库：</span>
+          <select id="collection-select" class="controls-select">
+            <!-- 目前只有 Milvus，就用 collection 来区分不同库 -->
+            <option value="novels" selected>novels</option>
+            <option value="demo">demo</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="controls-label">
+        <span>Session:</span>
+        <code id="session-label">demo</code>
+      </div>
+    </div>
     <div id="chat-scroll" class="chat-scroll">
       <!-- 初始提示 -->
       <div class="message-row bot">
@@ -387,7 +454,9 @@
     <form id="chat-form" class="input-area">
       <div class="input-top">
         <div class="hint">回车发送 · Shift+Enter 换行</div>
-        <div class="hint">Session: <code>demo</code> · Collection: <code>novels</code></div>
+        <div class="hint">
+          Session: <code id="session-label-bottom">demo</code> · Collection: <code id="collection-label-bottom">novels</code>
+        </div>
       </div>
       <div class="input-main">
         <textarea
@@ -417,6 +486,13 @@
   const sendBtn = document.getElementById("send-btn");
   const typing = document.getElementById("typing");
   const errorMsg = document.getElementById("error-msg");
+
+    // 新增：模型 / collection 下拉
+  const modelSelect = document.getElementById("model-select");
+  const collectionSelect = document.getElementById("collection-select");
+  const sessionLabel = document.getElementById("session-label");
+  const sessionLabelBottom = document.getElementById("session-label-bottom");
+  const collectionLabelBottom = document.getElementById("collection-label-bottom");
 
   function scrollToBottom() {
     requestAnimationFrame(() => {
@@ -473,7 +549,14 @@
     textarea.style.height = "auto";
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
   }
+  // 初始化标签文本
+  function syncLabels() {
+    if (sessionLabel) sessionLabel.textContent = SESSION_ID;
+    if (sessionLabelBottom) sessionLabelBottom.textContent = SESSION_ID;
+    if (collectionLabelBottom) collectionLabelBottom.textContent = collectionSelect.value || COLLECTION;
+  }
 
+  syncLabels();
   input.addEventListener("input", () => autoResize(input));
 
   // Enter 发送 / Shift+Enter 换行
@@ -502,8 +585,9 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: SESSION_ID,
-          collection: COLLECTION,
+          collection: collectionSelect.value || COLLECTION,
           query: query,
+          model: modelSelect.value,   // 新增：前端选择的模型
         }),
       });
 
