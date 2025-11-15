@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "chatrobot"
+version = "0.1.0"
+description = "Novel RAG system with Milvus and Qwen embeddings"
+authors = ["ChatRobot Dev <dev@example.com>"]
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
+pydantic = "^2.6.0"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.1"
+pymilvus = "^2.4.4"
+transformers = "^4.38.0"
+torch = "^2.2.0"
+openai = "^1.12.0"
+tqdm = "^4.66.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+httpx = "^0.26.0"
+
+[build-system]
+requires = ["poetry-core>=1.8.1"]
+build-backend = "poetry.core.masonry.api"
