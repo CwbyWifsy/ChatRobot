@@ -24,7 +24,31 @@
    ```
 
 3. 准备本地 Qwen3-0.6B 嵌入模型，将模型目录路径配置在 `.env` 中的 `EMBEDDING_MODEL_PATH`。
-4. 启动 Milvus 实例，并记录访问地址、认证信息。
+4. 启动 Milvus 实例，并记录访问地址、认证信息（可选方式见下）。
+
+#### Milvus 启动方式
+
+**Docker Standalone（推荐）**
+
+```bash
+docker pull milvusdb/milvus:v2.4.3-standalone
+docker run -d --name milvus-standalone \
+  -p 19530:19530 -p 9091:9091 \
+  milvusdb/milvus:v2.4.3-standalone
+```
+
+容器启动后即可通过 `http://127.0.0.1:19530` 访问，Windows 用户需先安装并启用 Docker Desktop + WSL2。
+
+**本地 milvus-server（Milvus Lite）**
+
+如果暂时无法使用 Docker，可通过 `pip` 安装 Milvus Lite，并直接在本机启动 `milvus-server`：
+
+```bash
+pip install "milvus>=2.4.3"
+milvus-server --host 127.0.0.1 --port 19530
+```
+
+该方式会在当前用户目录下创建 `milvus` 数据文件夹，无需额外的 etcd / MinIO 依赖，适合快速测试与本地开发。
 
 ### 2. 配置 `.env`
 
