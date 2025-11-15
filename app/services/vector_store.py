@@ -63,9 +63,9 @@ class MilvusVectorStore:
                 fields=[
                     FieldSchema("id", DataType.INT64, is_primary=True, auto_id=True),
                     FieldSchema("book_title", DataType.VARCHAR, max_length=256),
-                    FieldSchema("chapter_title", DataType.VARCHAR, max_length=512),
+                    FieldSchema("chapter_title", DataType.VARCHAR, max_length=2048),
                     FieldSchema("chunk_index", DataType.INT64),
-                    FieldSchema("source_path", DataType.VARCHAR, max_length=512),
+                    FieldSchema("source_path", DataType.VARCHAR, max_length=256),
                     FieldSchema("file_hash", DataType.VARCHAR, max_length=128),
                     FieldSchema("content", DataType.VARCHAR, max_length=8192),
                     FieldSchema("embedding", DataType.FLOAT_VECTOR, dim=settings.embedding_dim),
@@ -115,22 +115,24 @@ class MilvusVectorStore:
             return False
         return len(results) > 0
 
-    def insert_records(self, records: Sequence[VectorRecord], collection_name: str | None = None) -> None:
+    def insert_records(self, records, collection_name=None):
         if not records:
             return
+
         collection = Collection(collection_name or self.collection_name)
-        collection.insert(
-            {
-                "book_title": [record.book_title for record in records],
-                "chapter_title": [record.chapter_title for record in records],
-                "chunk_index": [record.chunk_index for record in records],
-                "source_path": [record.source_path for record in records],
-                "file_hash": [record.file_hash for record in records],
-                "content": [record.content for record in records],
-                "embedding": [record.embedding for record in records],
-            },
-            timeout=120,
-        )
+        rows = []
+        for r in records:
+            rows.append({
+                "book_title": r.book_title,
+                "chapter_title": r.chapter_title,
+                "chunk_index": r.chunk_index,
+                "source_path": r.source_path,
+                "file_hash": r.file_hash,
+                "content": r.content,
+                "embedding": r.embedding,
+            })
+
+        collection.insert(rows, timeout=120)
         collection.flush()
 
     def search(self, embedding: List[float], top_k: int = 4, collection_name: str | None = None):

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
+import sys
 from pathlib import Path
 from typing import Iterable, List
+from tqdm import tqdm
 
 from app.services.embedding import EmbeddingService
 from app.services.hashing import NovelHasher
@@ -26,13 +29,13 @@ async def load_file(path: Path) -> str:
 
 
 async def process_file(
-    path: Path,
-    embedding_service: EmbeddingService,
-    vector_store: MilvusVectorStore,
-    splitter: ChapterTextSplitter,
-    hasher: NovelHasher,
-    collection_name: str,
-    force: bool,
+        path: Path,
+        embedding_service: EmbeddingService,
+        vector_store: MilvusVectorStore,
+        splitter: ChapterTextSplitter,
+        hasher: NovelHasher,
+        collection_name: str,
+        force: bool,
 ) -> None:
     logger.info("Reading %s", path)
     content = await load_file(path)
@@ -46,25 +49,76 @@ async def process_file(
             logger.info("跳过 %s", path)
             return
 
-    chunks: List[Chunk] = list(splitter.split(content, book_title=book_title, source_path=path))
-    texts = [chunk.content for chunk in chunks]
-    embeddings = embedding_service.embed_documents(texts)
+    # 1⃣️ 切分文本 —— 带进度条
+    logger.info("正在切分章节…")
+    raw_chunks = list(splitter.split(content, book_title=book_title, source_path=path))
+    chunks = []
 
-    records = [
-        VectorRecord(
-            content=chunk.content,
-            embedding=embedding,
-            book_title=chunk.book_title,
-            chapter_title=chunk.chapter_title,
-            chunk_index=chunk.chunk_index,
-            source_path=str(chunk.source_path),
-            file_hash=file_hash,
-        )
-        for chunk, embedding in zip(chunks, embeddings)
-    ]
+    for c in tqdm(raw_chunks, desc="📑 分片处理中"):
+        chunks.append(c)
 
-    vector_store.insert_records(records, collection_name)
-    logger.info("已向集合 %s 写入 %d 个分片", collection_name, len(records))
+    # 2⃣️ 分批 embedding + 上传，三个真实进度条
+    BATCH_SIZE = 100  # 每批处理多少条，可以按机器情况改
+
+    total = len(chunks)
+    logger.info("正在分批生成向量并写入 Milvus...")
+
+    MAX_BOOK_TITLE_LEN = 256
+    MAX_CHAPTER_TITLE_LEN = 512
+    MAX_SOURCE_PATH_LEN = 256
+    MAX_FILE_HASH_LEN = 128
+    MAX_CONTENT_LEN = 8192
+
+    # ① 总体进度条：整本小说的分片总进度
+    with tqdm(total=total, desc="📦 总体进度", unit="chunk") as pbar_total:
+        for start in range(0, total, BATCH_SIZE):
+            end = min(start + BATCH_SIZE, total)
+            batch_chunks = chunks[start:end]
+            batch_texts = [c.content for c in batch_chunks]
+
+            # ② 当前批次 embedding 进度条（嵌入 n 条）
+            batch_embeddings: List[List[float]] = []
+            for text in tqdm(batch_texts, desc="🧠 本批 embedding", leave=False):
+                vec = embedding_service.embed_documents([text])[0]
+                batch_embeddings.append(vec)
+
+            # 组装当前批次记录
+            batch_records: list[VectorRecord] = []
+            for chunk, embedding in zip(batch_chunks, batch_embeddings):
+                chapter_title = chunk.chapter_title
+                if len(chapter_title) > MAX_CHAPTER_TITLE_LEN:
+                    logger.warning("跳过一条记录：chapter_title_len=%d, title=%r", len(chapter_title), chapter_title[:80])
+                    continue
+                batch_records.append(
+                    VectorRecord(
+                        content=chunk.content,
+                        embedding=embedding,
+                        book_title=chunk.book_title,
+                        chapter_title=chunk.chapter_title,
+                        chunk_index=chunk.chunk_index,
+                        source_path=str(chunk.source_path),
+                        file_hash=file_hash,
+                    )
+                )
+            # batch_records = [
+            #     VectorRecord(
+            #         content=chunk.content,
+            #         embedding=embedding,
+            #         book_title=chunk.book_title,
+            #         chapter_title=chunk.chapter_title,
+            #         chunk_index=chunk.chunk_index,
+            #         source_path=str(chunk.source_path),
+            #         file_hash=file_hash,
+            #     )
+            #     for chunk, embedding in zip(batch_chunks, batch_embeddings)
+            # ]
+
+            vector_store.insert_records(batch_records, collection_name)
+
+            # 更新总体进度
+            pbar_total.update(len(batch_chunks))
+
+    logger.info("已向集合 %s 写入 %d 个分片", collection_name, total)
 
 
 async def main() -> None:
