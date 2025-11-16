@@ -16,7 +16,7 @@ class NovelUploadResult(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Unique identifier for the conversation session")
     query: str = Field(..., description="User question")
-    top_k: int = Field(default=10, ge=1, le=10, description="Number of documents to retrieve")
+    top_k: int = Field(default=10, ge=1, le=100, description="Number of documents to retrieve")
     collection: Optional[str] = Field(
         None,
         description="Optional Milvus collection name. If omitted, the last used collection for the session or the "

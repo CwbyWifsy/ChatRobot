@@ -210,6 +210,7 @@ __marimo__/
 data/milvus/volumes/etcd/**
 data/milvus/volumes/milvus/**
 data/milvus/volumes/minio/**
-
+data/novels/*.txt
+data/novels_bak/*.txt
 models/Qwen3-Embedding-0.6B/**
 
